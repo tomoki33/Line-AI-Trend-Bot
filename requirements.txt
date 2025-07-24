@@ -1,5 +1,11 @@
 llama-index
+llama-index-readers-web
 langchain
+langchain-community
+langchain-google-community
 openai
 requests
 python-dotenv
+google-api-python-client
+beautifulsoup4
+lxml
