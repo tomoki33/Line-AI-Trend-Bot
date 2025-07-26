@@ -26,7 +26,7 @@
 -   **ワーカーLambda (`worker.py`)**: SQSキューをトリガーとして起動。Web検索やAI要約などの重い処理を実行し、結果をLINEのPush APIでユーザーに送信します。
 -   **Lambda Warmer (EventBridge)**: APIハンドラLambdaのコールドスタートを防ぐため、1分ごとにLambdaを呼び出し、常にウォーム状態を維持します。
 
-## 셋업 セットアップ
+## セットアップ
 
 1.  **リポジトリのクローン**:
     ```sh
