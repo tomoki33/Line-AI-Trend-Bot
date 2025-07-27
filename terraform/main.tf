@@ -65,32 +65,7 @@ resource "aws_lambda_function" "line_bot_api_handler" {
 
 # --- Provisioned Concurrencyとエイリアスの設定を削除 ---
 
-# --- ここからWarmerの設定を追加 ---
-
-# Lambda Warmer用のEventBridgeルール (1分ごとに実行)
-resource "aws_cloudwatch_event_rule" "warmer_rule" {
-  name                = "line-bot-warmer-rule"
-  schedule_expression = "rate(1 minute)" # 実行間隔を1分に短縮し、常にウォーム状態を維持
-}
-
-# EventBridgeがAPIハンドラLambdaを呼び出す権限
-resource "aws_lambda_permission" "allow_cloudwatch_to_call_warmer" {
-  statement_id  = "AllowExecutionFromCloudWatch"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.line_bot_api_handler.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.warmer_rule.arn
-}
-
-# EventBridgeルールとAPIハンドラLambdaを接続
-resource "aws_cloudwatch_event_target" "invoke_lambda_target" {
-  rule      = aws_cloudwatch_event_rule.warmer_rule.name
-  arn       = aws_lambda_function.line_bot_api_handler.arn
-  # Warmerからの呼び出しであることを示すダミーの入力を設定
-  input = jsonencode({"source" = "lambda-warmer"})
-}
-
-# --- ここまでWarmerの設定を追加 ---
+# --- Warmer関連のリソースをすべて削除 ---
 
 # 4c. ワーカーLambda関数
 resource "aws_lambda_function" "line_bot_worker" {
