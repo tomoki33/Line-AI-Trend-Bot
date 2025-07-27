@@ -27,9 +27,11 @@ def search_and_summarize(user_query):
     
     # 優先して検索するサイトのリスト
     priority_site_queries = [
-        f"site:techcrunch.com {search_keywords}",
-        f"site:venturebeat.com {search_keywords}",
-        f"site:artificialintelligence-news.com {search_keywords}",
+        f"site:huggingface.co/blog {search_keywords}",
+        f"site:openai.com/blog {search_keywords}",
+        f"site:ai.googleblog.com {search_keywords}",
+        f"site:paperswithcode.com {search_keywords}",
+        f"site:towardsdatascience.com {search_keywords}",
     ]
     
     links = []
@@ -100,7 +102,7 @@ def search_and_summarize(user_query):
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "以下の英語のテキストを、AIの最新動向として重要なポイントを抽出し、日本語で簡潔に要約してください。"},
+                    {"role": "system", "content": "あなたは優秀なAIリサーチャーです。以下の英語のテキストを、AIの最新動行として重要なポイントを抽出し、専門家の視点から日本語で要約してください。"},
                     {"role": "user", "content": f"元の質問: {user_query}\n\nテキスト:\n{chunk}"}
                 ]
             )
