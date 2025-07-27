@@ -10,9 +10,9 @@ resource "aws_ecr_repository" "line_bot_repo" {
 
 # --- ここから変更 ---
 
-# 2a. APIハンドラLambda用のIAMロール
-resource "aws_iam_role" "api_handler_role" {
-  name = "line-bot-api-handler-role"
+# 2. Lambda実行用のIAMロール (1つに再統合)
+resource "aws_iam_role" "lambda_exec_role" {
+  name = "line-bot-lambda-exec-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -23,28 +23,15 @@ resource "aws_iam_role" "api_handler_role" {
   })
 }
 
-# 2b. ワーカーLambda用のIAMロール
-resource "aws_iam_role" "worker_role" {
-  name = "line-bot-worker-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
-}
-
-# 3. Lambdaの基本実行ポリシーを両方のロールにアタッチ
-resource "aws_iam_role_policy_attachment" "api_handler_lambda_policy" {
-  role       = aws_iam_role.api_handler_role.name
+# 3. 必要なポリシーをすべて1つのロールにアタッチ
+resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+  role       = aws_iam_role.lambda_exec_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy_attachment" "worker_lambda_policy" {
-  role       = aws_iam_role.worker_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+resource "aws_iam_role_policy_attachment" "lambda_sqs_execution" {
+  role       = aws_iam_role.lambda_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
 }
 
 # --- ここまで変更 ---
@@ -60,13 +47,13 @@ resource "aws_lambda_function" "line_bot_api_handler" {
   function_name = "line-bot-api-handler-function"
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.line_bot_repo.repository_url}:latest"
-  role          = aws_iam_role.api_handler_role.arn
-  timeout       = 30 # タイムアウトを30秒に延長して、コールドスタート時のマージンを確保
-  memory_size   = 2048 # メモリを増強してコールドスタートを高速化
+  role          = aws_iam_role.lambda_exec_role.arn # 修正
+  timeout       = 30
+  memory_size   = 2048
 
   image_config {
-    # このLambdaは「line_bot_api_handler.py」の「lambda_handler」を呼び出すように指示
-    command = ["line_bot_api_handler.lambda_handler"]
+    # このLambdaは「LineBot.py」の「lambda_handler」を呼び出すように指示
+    command = ["LineBot.lambda_handler"]
   }
 
   environment {
@@ -110,9 +97,9 @@ resource "aws_lambda_function" "line_bot_worker" {
   function_name = "line-bot-worker-function"
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.line_bot_repo.repository_url}:latest"
-  role          = aws_iam_role.worker_role.arn # 修正
+  role          = aws_iam_role.lambda_exec_role.arn # 修正
   timeout       = 300
-  memory_size   = 2048 # メモリを増強してAI処理を安定させる
+  memory_size   = 2048
 
   image_config {
     # こちらのLambdaは「worker.py」の「lambda_handler」を呼び出すように指示
@@ -159,14 +146,9 @@ resource "aws_iam_policy" "sqs_policy" {
   })
 }
 
-# SQSポリシーを両方のロールにアタッチ
-resource "aws_iam_role_policy_attachment" "api_handler_sqs_attachment" {
-  role       = aws_iam_role.api_handler_role.name
-  policy_arn = aws_iam_policy.sqs_policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "worker_sqs_attachment" {
-  role       = aws_iam_role.worker_role.name
+# SQSポリシーを統合ロールにアタッチ
+resource "aws_iam_role_policy_attachment" "sqs_attachment" {
+  role       = aws_iam_role.lambda_exec_role.name
   policy_arn = aws_iam_policy.sqs_policy.arn
 }
 

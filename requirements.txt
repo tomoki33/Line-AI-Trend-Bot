@@ -10,3 +10,4 @@ google-api-python-client
 beautifulsoup4
 lxml
 numpy==1.26.4
+boto3

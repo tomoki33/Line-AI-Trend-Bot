@@ -21,9 +21,9 @@
                                                                             [ワーカーLambda] -> (Web検索 & AI要約) -> [LINE Platform] -> [LINEユーザー]
 ```
 
--   **APIハンドラLambda (`LineBot.py`)**: LINEからのWebhookリクエストを受け取り、即座にSQSキューにタスクを投入して`200 OK`を返す、超軽量な関数。LINEのタイムアウトを確実に回避します。
+-   **APIハンドラLambda (`line_bot_api_handler.py`)**: LINEからのWebhookリクエストを受け取り、即座にSQSキューにタスクを投入して`200 OK`を返す、超軽量な関数。LINEのタイムアウトを確実に回避します。
 -   **SQSキュー**: 処理すべきタスクを一時的に保持するメッセージキュー。
--   **ワーカーLambda (`worker.py`)**: SQSキューをトリガーとして起動。Web検索やAI要約などの重い処理を実行し、結果をLINEのPush APIでユーザーに送信します。
+-   **ワーカーLambda (`worker.py`)**: SQSキューをトリガーとして起動する**AIエージェント**。受け取ったタスク（ユーザーの質問）に基づき、Web検索とAIによる要約という一連のアクションを実行し、結果をユーザーに返します。
 -   **Lambda Warmer (EventBridge)**: APIハンドラLambdaのコールドスタートを防ぐため、1分ごとにLambdaを呼び出し、常にウォーム状態を維持します。
 
 ## セットアップ
@@ -58,7 +58,7 @@ LINE Botが正しく応答しない場合、以下の設定を確認してくだ
 
 ## 🚀 デプロイ手順 (コード修正後など)
 
-**注意**: Dockerコマンドはプロジェクトのルートディレクトリ (`linebot/`) で、Terraformコマンドは `terraform/` ディレクトリで実行します。
+**注意**: Dockerコマンドはプロジェクトのルートディレクトリ (`linebot/`) で、AWS CLI/Terraformコマンドは `terraform/` ディレクトリで実行します。
 
 ### 1. AWSアカウントIDの確認と設定
 ターミナルで以下のコマンドを実行し、12桁のアカウントIDをコピーします。
@@ -70,7 +70,7 @@ aws sts get-caller-identity --query Account --output text
 ### 2. ECRログイン
 1時間に1回程度、実行が必要です。
 ```sh
-aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.ap-northeast-1.amazonaws.com
+aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 783764601888.dkr.ecr.ap-northeast-1.amazonaws.com
 ```
 
 ### 3. Dockerイメージのビルドとプッシュ (ルートディレクトリで実行)
@@ -79,13 +79,24 @@ aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS
 docker buildx build --platform linux/amd64 -t line-bot-repo --load .
 
 # タグ付け
-docker tag line-bot-repo:latest <ACCOUNT_ID>.dkr.ecr.ap-northeast-1.amazonaws.com/line-bot-repo:latest
+docker tag line-bot-repo:latest 783764601888.dkr.ecr.ap-northeast-1.amazonaws.com/line-bot-repo:latest
 
 # プッシュ
-docker push <ACCOUNT_ID>.dkr.ecr.ap-northeast-1.amazonaws.com/line-bot-repo:latest
+docker push 783764601888.dkr.ecr.ap-northeast-1.amazonaws.com/line-bot-repo:latest
 ```
 
-### 4. Terraformの適用 (terraform/ ディレクトリで実行)
+### 4. Lambda関数のコードを更新 (ルートディレクトリで実行)
+**Pythonコードを修正した場合は、このコマンドを実行します。**
+```sh
+# APIハンドラLambdaを更新
+aws lambda update-function-code --function-name line-bot-api-handler-function --image-uri 783764601888.dkr.ecr.ap-northeast-1.amazonaws.com/line-bot-repo:latest
+
+# ワーカーLambdaを更新
+aws lambda update-function-code --function-name line-bot-worker-function --image-uri 783764601888.dkr.ecr.ap-northeast-1.amazonaws.com/line-bot-repo:latest
+```
+
+### 5. インフラ設定の更新 (terraform/ ディレクトリで実行)
+**main.tfを修正した場合のみ、このコマンドを実行します。**
 ```sh
 cd terraform
 # 最初に一度、またはプロバイダ設定変更後に実行
@@ -97,6 +108,9 @@ terraform apply \
   -var="openai_api_key=$(grep OPENAI_API_KEY ../.env | cut -d '=' -f2)" \
   -var="google_api_key=$(grep GOOGLE_API_KEY ../.env | cut -d '=' -f2)" \
   -var="google_cse_id=$(grep GOOGLE_CSE_ID ../.env | cut -d '=' -f2)"
+
+# ルートディレクトリに戻る
+cd ..
 ```
 
 ---
